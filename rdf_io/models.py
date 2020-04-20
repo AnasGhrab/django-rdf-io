@@ -8,7 +8,8 @@ from builtins import object
 import logging
 logger = logging.getLogger(__name__)
 
-from django.utils.encoding import python_2_unicode_compatible
+#from django.utils.encoding import python_2_unicode_compatible
+from six import python_2_unicode_compatible
 
 from django.db import models
 from django.conf import settings
@@ -38,13 +39,13 @@ from django.db.models import Q
 
 # helpers
 def getattr_path(obj,path) :
-    """ Get a list of attribute values matching a nested attribute path with filters 
-    
+    """ Get a list of attribute values matching a nested attribute path with filters
+
     format of path is a string  a.b.c  with optional filters a[condition].b[condition] etc
     """
     try :
         return _getattr_related(obj,obj, pathsplit(path.replace('__','.')), extravals={})
-        
+
     except ValueError as e:
         import traceback
 #        import pdb; pdb.set_trace()
@@ -65,27 +66,27 @@ def pathsplit(str):
             infilt=False
     result.append(str[tok_start:])
     return result
-    
+
 def getattr_tuple_path(obj,pathlist) :
-    """ Get a list of attribute value tuples matching a set of nested attribute paths with filters 
-    
+    """ Get a list of attribute value tuples matching a set of nested attribute paths with filters
+
     format of each path is a string  a.b.c  with optional filters a[condition].b[condition] etc
-    
+
     tuples are generated at the level of common path - e.g (a.b.c,a.b.d) generaters the tuple (val(c), val(d)) for objects in path a.b
-    """ 
+    """
     for p in pathlist:
         p.replace('__','.').replace("/",".")
     try :
         return _getattr_related(obj,obj, pathsplit(pathlist[0]), pathlist=pathlist[1:], extravals={})
-        
+
     except ValueError as e:
         import traceback
 #        import pdb; pdb.set_trace()
         raise ValueError("Failed to map '{}' on '{}' (cause {})".format(pathlist, obj, e))
-        
+
 def dequote(s):
-    """ Remove outer quotes from string 
-    
+    """ Remove outer quotes from string
+
     If a string has single or double quotes around it, remove them.
     todo: Make sure the pair of quotes match.
     If a matching pair of quotes is not found, return the string unchanged.
@@ -98,10 +99,10 @@ def dequote(s):
 
 def quote(s):
     """ quote string so it gets processed as a literal
-    
+
     leave @lang and ^^datatype qualifiers outside quoting!
     """
-    
+
     if  isinstance(s, string_types) and s[0] not in ('"',"'"):
         try:
             root,lang = s.split('@')
@@ -110,10 +111,10 @@ def quote(s):
             try:
                 root,lang = s.split('^^')
                 return ''.join(('"',root,'"','^^',lang))
-            except:            
+            except:
                 return s.join(('"','"'))
     return s
-    
+
 def _apply_filter(val, filter,localobj, rootobj) :
     """
         Apply a simple filter to a specific property, with a list of possible values
@@ -134,11 +135,11 @@ def _apply_filter(val, filter,localobj, rootobj) :
 
 def apply_pathfilter(obj, filter_expr ):
     """ does obj match filter expression?
-    
+
         apply a filter based on a list of path expressions  path1=a,b AND path2=c,db
     """
     and_clauses = filter_expr.split(" AND ")
-    
+
     for clause in and_clauses:
 
         (path,vallist) = clause.split("=")
@@ -167,20 +168,20 @@ def apply_pathfilter(obj, filter_expr ):
         # did any value match?
         if not matched :
             return False
-            
+
     return True
-    
+
 def _getattr_related(rootobj,obj, fields, pathlist=None, extravals={} ):
-    """ recursive walk down object path looking for field values 
-    
+    """ recursive walk down object path looking for field values
+
         get an attribute - if multi-valued will be a list object!
-        if pathlist is present, then each path in the 
-        fields may include filters.  
+        if pathlist is present, then each path in the
+        fields may include filters.
     """
     # print obj, fields
     if not len(fields):
         return [[obj,] + [ extravals[i] for i in range(0,len(extravals)) ]] if extravals else [obj]
-        
+
     field = fields.pop(0)
     if pathlist:
         pathlist2= list(pathlist)
@@ -197,7 +198,7 @@ def _getattr_related(rootobj,obj, fields, pathlist=None, extravals={} ):
     filters = None
     # try to get - then check for django 1.7+ manager for related field
     try:
-        # check for lang 
+        # check for lang
         try:
             (field,langfield) = field.split('@')
             if langfield[0] in ["'" , '"'] :
@@ -222,7 +223,7 @@ def _getattr_related(rootobj,obj, fields, pathlist=None, extravals={} ):
         except:
             typeuri = None
         # check for filt
-        # check for filter 
+        # check for filter
         if "[" in field :
             filter = field[ field.index("[") +1 : -1 ]
             field = field[0:field.index("[")]
@@ -250,7 +251,7 @@ def _getattr_related(rootobj,obj, fields, pathlist=None, extravals={} ):
     except AttributeError:
         relobjs = _get_relobjs(obj,field,filters)
 
-        # will still throw an exception if val is not set!     
+        # will still throw an exception if val is not set!
     try:
         # slice the list fo fields[:] to force a copy so each iteration starts from top of list in spite of pop()
         return itertools.chain(*(_getattr_related(rootobj,xx, fields[:], pathlist=pathlist) for xx in relobjs.all()))
@@ -263,20 +264,20 @@ def _getattr_related(rootobj,obj, fields, pathlist=None, extravals={} ):
 
 def _get_relobjs(obj,field,filters=None):
     """Find related objects that match
-    
+
     Could be linked using a "related_name" or as <type>_set
-    
+
     django versions have changed this around so somewhat tricky..
     """
     # then try to find objects of this type with a foreign key property using either (name) supplied or target object type
-    
+
     if not filters:
         filters = { 'includes': {} , 'excludes' : {} }
     if field.endswith(")") :
         (field, relprop ) = str(field[0:-1]).split("(")
     else :
         relprop = None
-                   
+
     try:
         reltype = ContentType.objects.get(model=field)
     except ContentType.DoesNotExist as e :
@@ -287,21 +288,21 @@ def _get_relobjs(obj,field,filters=None):
         return getattr(obj, "".join((field,"_set"))).filter(**filters['includes']).exclude(**filters['excludes'])
     except:
         pass
-    
+
     # trickier then - need to look at models of the named type
     claz = reltype.model_class()
     for prop,val in list(claz.__dict__.items()) :
-        # skip related property names if set   
+        # skip related property names if set
         if relprop and prop != relprop :
             continue
         if relprop or type(val) is ReverseSingleRelatedObjectDescriptor and val.field.related.model == type(obj) :
             filters['includes'].update({prop:obj})
-            return claz.objects.filter(**filters['includes']).exclude(**filters['excludes'])        
-        
+            return claz.objects.filter(**filters['includes']).exclude(**filters['excludes'])
+
 def _makefilters(filter, obj, rootobj):
     """Makes a django filter syntax for includes and excludes from provided filter
-    
-    allow for filter clauses with references relative to the object being serialised, the root of the path being encoded or the element in the path specifying the filter""" 
+
+    allow for filter clauses with references relative to the object being serialised, the root of the path being encoded or the element in the path specifying the filter"""
     if not filter :
         return {}
     filterclauses = dict( [fc.split("=") for fc in filter.replace(" AND ",",").split(",")])
@@ -314,12 +315,12 @@ def _makefilters(filter, obj, rootobj):
         else:
             includes = _add_clause(includes, fc, fval, obj, rootobj)
 
-    return { 'includes': includes , 'excludes' : excludes }        
-            
+    return { 'includes': includes , 'excludes' : excludes }
+
 def _add_clause(extrafilterclauses, fc, fval , obj, rootobj):
-    if not fval :                            
+    if not fval :
         extrafilterclauses[ "".join((fc,"__isnull"))] = False
-    elif fval == 'None' :                            
+    elif fval == 'None' :
         extrafilterclauses[ "".join((fc,"__isnull"))] = True
     elif fval.startswith('^'): # property value via path from root object being serialised
         try:
@@ -329,7 +330,7 @@ def _add_clause(extrafilterclauses, fc, fval , obj, rootobj):
             extrafilterclauses[fc] = objvals.pop()
         except Exception as e:
             raise ValueError ("Error in filter clause %s on field %s " % (fc,prop))
-        
+
     elif fval.startswith('.'): # property value via path from current path object
         try:
             objvals = getattr_path(obj,fval[1:])
@@ -345,9 +346,9 @@ def _add_clause(extrafilterclauses, fc, fval , obj, rootobj):
         extrafilterclauses[fc] = getattr(obj, fval)
     else:
         extrafilterclauses[fc] = fval
-       
+
     return extrafilterclauses
-   
+
 def expand_curie(value):
     try:
         parts = value.split(":")
@@ -367,7 +368,7 @@ def as_uri(value):
     except:
         pass
     return value.join("<",">")
-    
+
 
 def as_resource(gr,curie) :
     cleaned = dequote(curie)
@@ -378,30 +379,30 @@ def as_resource(gr,curie) :
         (ns,value) = cleaned.split(":",2)
     except:
         return URIRef(cleaned)  # just have to assume its not a problem - URNs are valid uri.s
-        # raise ValueError("value not value HTTP or CURIE format %s" % curie)    
+        # raise ValueError("value not value HTTP or CURIE format %s" % curie)
     try :
         nsuri = Namespace.getNamespace(ns)
         if nsuri :
             gr.namespace_manager.bind( str(ns), namespace.Namespace(nsuri), override=False)
             return URIRef("".join((str(nsuri),value)))
         else :
-            return URIRef(cleaned) 
+            return URIRef(cleaned)
     except:
         raise ValueError("prefix " + ns + "not recognised")
 
-TYPES = { 
+TYPES = {
     'xsd:int' : XSD.integer ,
-    'xsd:float': XSD.float , 
-    'xsd:double': XSD.double , 
+    'xsd:float': XSD.float ,
+    'xsd:double': XSD.double ,
     'xsd:time' : XSD.time ,
     'xsd:dateTime' : XSD.dateTime ,
     'xsd:boolean' : XSD.boolean ,
     'xsd:integer' : XSD.integer ,
     }
-    
+
 def makenode(gr,value, is_resource=False):
     """ make a RDF node from a string representation
-    
+
     probably ought to be able to find this function in rdflib but seems hidden"""
     if is_resource or value[0] == '<' and '<' not in value[1:] and value [-1] == '>' :
         return as_resource(gr,value)
@@ -429,9 +430,9 @@ def makenode(gr,value, is_resource=False):
                         except:
                             return Literal(dequote(value))
         except:
-            raise ValueError("Value not a convertable type %s" % type(value))        
- 
-    
+            raise ValueError("Value not a convertable type %s" % type(value))
+
+
 def validate_urisyntax(value):
 
     if value[0:4] == 'http' :
@@ -449,7 +450,7 @@ def validate_propertypath(path):
     for value in path.split():
         validate_urisyntax(value)
 
-    
+
 class RDFpath_Field(models.CharField):
     """
         Char field for URI with syntax checking for CURIE or http syntax
@@ -460,7 +461,7 @@ class RDFpath_Field(models.CharField):
         kwargs['max_length'] = 500
         kwargs['help_text']=_(u'space separated list of RDF property URIs (in form a:b or full URI) representing a nested set of properties in an RDF graph')
         super( RDFpath_Field, self).__init__(*args, **kwargs)
-        
+
 class CURIE_Field(models.CharField):
     """
         Char field for URI with syntax checking for CURIE or http syntax
@@ -471,7 +472,7 @@ class CURIE_Field(models.CharField):
         kwargs['max_length'] = 200
         kwargs['help_text']=_(u'use a:b or full URI')
         super( CURIE_Field, self).__init__(*args, **kwargs)
-    
+
 class EXPR_Field(models.CharField):
     """
         Char field for expression - literal or nested atribute with syntax checking for CURIE or http syntax
@@ -492,45 +493,45 @@ class FILTER_Field(models.CharField):
         kwargs['max_length'] = 400
         kwargs['help_text']=_(u'path=value, eg label__label_text="frog"')
         super( FILTER_Field, self).__init__(*args, **kwargs)
-        
-    
+
+
 # Need natural keys so can reference in fixtures - let this be the uri
 
- 
+
 class NamespaceManager(models.Manager):
     def get_by_natural_key(self, uri):
         return self.get(uri=uri)
 
 class Namespace(models.Model) :
     """
-        defines a namespace so we can use short prefix where convenient 
+        defines a namespace so we can use short prefix where convenient
     """
     objects = NamespaceManager()
-    
+
     uri = models.CharField('uri',max_length=100, unique=True, null=False)
     prefix = models.CharField('prefix',max_length=8,unique=True,null=False)
     notes = models.TextField(_(u'change note'),blank=True)
 
     def natural_key(self):
         return(self.uri,)
-    
+
     def get_base_uri(self):
         return self.uri[0:-1]
     def is_hash_uri(self):
         return self.uri[-1] == '#'
-    
+
     @staticmethod
     def getNamespace( prefix) :
         try:
             return Namespace.objects.get(prefix = prefix)
         except:
             return None
-      
-    class Meta(object): 
+
+    class Meta(object):
         verbose_name = _(u'namespace')
         verbose_name_plural = _(u'namespaces')
     def __unicode__(self):
-        return self.uri    
+        return self.uri
 
 class GenericMetaPropManager(models.Manager):
     def get_by_natural_key(self, curie):
@@ -539,15 +540,15 @@ class GenericMetaPropManager(models.Manager):
             return self.get(namespace__prefix=namespace, propname=prop)
         except:
             return self.get(uri=curie)
-            
-        
+
+
 class GenericMetaProp(models.Model) :
     """
         a metadata property that can be attached to any target model to provide extensible metadata.
         Works with the namespace object to allow short forms of metadata to be displayed
     """
     objects = GenericMetaPropManager()
-    namespace = models.ForeignKey(Namespace,blank=True, null=True, verbose_name=_(u'namespace'))
+    namespace = models.ForeignKey(Namespace,blank=True, null=True, verbose_name=_(u'namespace'), on_delete = models.CASCADE)
     propname =  models.CharField(_(u'name'),blank=True,max_length=250,editable=True)
     uri = CURIE_Field(blank=True, unique=True)
     definition  = models.TextField(_(u'definition'), blank=True)
@@ -558,7 +559,7 @@ class GenericMetaProp(models.Model) :
     def asURI(self):
         """ Returns fully qualified uri form of property """
         return uri
-        
+
     def save(self,*args,**kwargs):
         if self.namespace :
             self.uri = "".join((self.namespace.uri,self.propname))
@@ -571,31 +572,31 @@ class GenericMetaProp(models.Model) :
                     self.propname = term
             except:
                 pass
-                
+
         super(GenericMetaProp, self).save(*args,**kwargs)
 
 
 class AttachedMetadata(models.Model):
-    """ metadata property that can be attached using subclass that specificies the subject property FK bining 
-    
+    """ metadata property that can be attached using subclass that specificies the subject property FK bining
+
         extensible metadata using rdf_io managed reusable generic metadata properties
     """
-    metaprop   =  models.ForeignKey(GenericMetaProp,verbose_name='property') 
+    metaprop   =  models.ForeignKey(GenericMetaProp,verbose_name='property', on_delete = models.CASCADE)
     value = models.CharField(_(u'value'),max_length=2000)
     def __unicode__(self):
-        return str(self.metaprop.__unicode__())   
+        return str(self.metaprop.__unicode__())
     def getRDFValue(self):
         """ returns value in appropriate datatype """
         return makenode(value)
 
     class Meta(object):
         pass
- #       abstract = True        
-        
+ #       abstract = True
+
 class ObjectTypeManager(models.Manager):
     def get_by_natural_key(self, uri):
         return self.get(uri=uri)
-        
+
 class ObjectType(models.Model):
     """
         Allows for a target object to be declared as multiple object types
@@ -604,10 +605,10 @@ class ObjectType(models.Model):
     objects = ObjectTypeManager()
     uri = CURIE_Field(_(u'URI'),blank=False,editable=True)
     label = models.CharField(_(u'Label'),blank=False,max_length=250,editable=True)
-    
+
     def natural_key(self):
         return (self.uri,)
-    
+
     # check short form is registered
     def __unicode__(self):              # __unicode__ on Python 2
         return " -- ".join((self.uri,self.label ))
@@ -615,10 +616,10 @@ class ObjectType(models.Model):
 class ObjectMappingManager(models.Manager):
     def get_by_natural_key(self, name):
         return self.get(name=name)
-                
+
 class ObjectMapping(models.Model):
     """
-        Maps an instance of a model to a resource (i.e. a URI with a type declaration) 
+        Maps an instance of a model to a resource (i.e. a URI with a type declaration)
     """
     objects = ObjectMappingManager()
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
@@ -629,11 +630,11 @@ class ObjectMapping(models.Model):
     obj_type = models.ManyToManyField(ObjectType, help_text=_(u'set this to generate a object rdf:type X statement' ))
     filter = FILTER_Field(_(u'Filter'), null=True, blank=True ,editable=True)
     def natural_key(self):
-        return (self.name,)    
-  
+        return (self.name,)
+
     def __unicode__(self):              # __unicode__ on Python 2
-        return self.name 
- 
+        return self.name
+
     @staticmethod
     def new_mapping(object_type,content_type_label, title, idfield, tgt,filter=None, auto_push=False, app_label=None):
         if not app_label :
@@ -642,80 +643,80 @@ class ObjectMapping(models.Model):
             except:
                 pass # hope we can find it?
         content_type = ContentType.objects.get(app_label=app_label.lower(),model=content_type_label.lower())
-        defaults =         { "auto_push" : auto_push , 
+        defaults =         { "auto_push" : auto_push ,
               "id_attr" : idfield,
               "target_uri_expr" : tgt,
               "content_type" : content_type
             }
         if filter :
             defaults['filter']=filter
-            
+
         (pm,created) =   ObjectMapping.objects.get_or_create(name=title, defaults =defaults)
         if not created :
             AttributeMapping.objects.filter(scope=pm).delete()
-        
-        pm.obj_type.add(object_type)
-        pm.save()    
 
-        return pm   
- 
- 
+        pm.obj_type.add(object_type)
+        pm.save()
+
+        return pm
+
+
 class AttributeMapping(models.Model):
     """
         records a mapping from an object mapping that defines a relation from the object to a value using a predicate
     """
-    scope = models.ForeignKey(ObjectMapping)
+    scope = models.ForeignKey(ObjectMapping, on_delete = models.CASCADE)
     attr = EXPR_Field(_(u'source attribute'),help_text=_(u'literal value or path (attribute[filter].)* with optional @element or ^^element eg locationname[language=].name@language.  filter values are empty (=not None), None, or a string value'),blank=False,editable=True)
     # filter = FILTER_Field(_(u'Filter'), null=True, blank=True,editable=True)
     predicate = CURIE_Field(_(u'predicate'),blank=False,editable=True,help_text=_(u'URI or CURIE. Use :prop.prop.prop form to select a property of the mapped object to use as the predicate'))
     is_resource = models.BooleanField(_(u'as URI'))
-    
+
     def __unicode__(self):
         return ( ' '.join((self.attr, self.predicate )))
 
 class EmbeddedMapping(models.Model):
     """ embedded mapping using a template
-    
+
         records a mapping for a complex data structure
     """
-    scope = models.ForeignKey(ObjectMapping)
+    scope = models.ForeignKey(ObjectMapping, on_delete = models.CASCADE)
     attr = EXPR_Field(_(u'source attribute'),help_text=_(u'attribute - if empty nothing generated, if multivalued will be iterated over'))
     predicate = CURIE_Field(_(u'predicate'),blank=False,editable=True, help_text=_(u'URI or CURIE. Use :prop.prop.prop form to select a property of the mapped object to use asthe predicate'))
     struct = models.TextField(_(u'object structure'),max_length=2000, help_text=_(u' ";" separated list of <em>predicate</em> <em>attribute expr</em>  where attribute expr a model field or "literal" or <uri> - in future may be an embedded struct inside {} '),blank=False,editable=True)
     use_blank = models.BooleanField(_(u'embed as blank node'), default=True)
-    
+
     def __unicode__(self):
         return ( ' '.join(('struct:',self.attr, self.predicate )))
 
 class ChainedMapping(models.Model):
     """ nested mapping using another mapping
-    
+
         Chains to a specific mapping to nest the resulting graph within the current serialisation
     """
-    scope = models.ForeignKey(ObjectMapping,editable=False, )
+    scope = models.ForeignKey(ObjectMapping, editable=False, on_delete = models.CASCADE)
     attr = EXPR_Field(_(u'source attribute'),help_text=_(u'attribute - if empty nothing generated, if multivalued will be iterated over'))
     predicate = CURIE_Field(_(u'predicate'),blank=False,editable=True, help_text=_(u'URI or CURIE. Use :prop.prop.prop form to select a property of the mapped object to use asthe predicate'))
-    chainedMapping = models.ForeignKey(ObjectMapping, blank=False,editable=True, related_name='chained',help_text=_(u'Mapping to nest, for each value of attribute. may be recursive'))
-    
+    chainedMapping = models.ForeignKey(ObjectMapping, blank=False,editable=True, related_name='chained',help_text=_(u'Mapping to nest, for each value of attribute. may be recursive'), on_delete = models.CASCADE)
+
     def __unicode__(self):
         return ( ' '.join(('chained mapping:',self.attr, self.predicate, self.chainedMapping.name )))
- 
+
 MODE_CHOICES = (
       ( 'REVIEW', 'Persist results in mode for review'),
       ( 'TEST', 'Does not persist results' ),
       ( 'PUBLISH' , 'Data published to final target' )
     )
-    
+
 class ConfigVar(models.Model):
-    
+
     """ Sets a configuration variable for ServiceBindings templates """
     var=models.CharField(max_length=16, null=False, blank=False , verbose_name='Variable name')
     value=models.CharField(max_length=255, null=False, blank=True , verbose_name='Variable value')
     mode=models.CharField( verbose_name='Mode scope', choices=MODE_CHOICES,null=True,blank=True,max_length=10 )
-    
+
     def __unicode__(self):
         return ( ' '.join(('var:',self.var, ' (', str(self.mode), ') = ', self.value )))
-    
+
     @staticmethod
     def getval(var,mode):
         try:
@@ -723,27 +724,27 @@ class ConfigVar(models.Model):
         except:
             try:
                 return ConfigVar.objects.filter(var=var, mode__isnull=True).first().value
-            except: 
+            except:
                 pass
         return None
-        
+
     @staticmethod
     def getvars(mode):
         return ConfigVar.objects.filter(Q(mode=mode) | Q(mode__isnull=True)).order_by('var')
-        
+
 
 class ServiceBinding(models.Model):
-    """ Binds object mappings to a RDF handling service 
+    """ Binds object mappings to a RDF handling service
 
         Services may perform several roles:
         * Validation
         * INFERENCE
         * Persistence
-        
+
         Bindings may be controlled by status variables in the objects being bound - for example draft content published to a separate directory.
-        
+
         Bindings, if present for an object, override system defaults.
-        
+
         Services may be chained with an exception handling clause. API will provide options for choosing starting point of chain and whether to automatically follow chain or report and pause.
     """
     VALIDATION='VALIDATION'
@@ -758,8 +759,8 @@ class ServiceBinding(models.Model):
       ( INFERENCE, 'INFERENCE - The entailed response replaces the default encoding in downstream services' ),
       ( PERSIST_CREATE, 'PERSIST_CREATE - A new resource is created only if not present in the persistence store' ),
       ( PERSIST_REPLACE, 'PERSIST_REPLACE - (e.g. HTTP PUT) The resource and its properties are replaced in the persistence store' ),
-      ( PERSIST_UPDATE, 'PERSIST_UPDATE - (e.g. HTTP POST) The resource and its properties are added to the persistence store' ), 
-      ( PERSIST_PURGE, 'PERSIST_PURGE - (e.g. HTTP DELETE) The resource and its properties are deleted from the persistence store' ), 
+      ( PERSIST_UPDATE, 'PERSIST_UPDATE - (e.g. HTTP POST) The resource and its properties are added to the persistence store' ),
+      ( PERSIST_PURGE, 'PERSIST_PURGE - (e.g. HTTP DELETE) The resource and its properties are deleted from the persistence store' ),
     )
     RDF4JREST = 'RDF4JREST'
     LDP = 'LDP'
@@ -776,7 +777,7 @@ class ServiceBinding(models.Model):
     API_TEMPLATES = { RDF4JREST : "http://localhost:8080/rdf4j-server/repositories/myrepo" }
 
     title = models.CharField(max_length=255, blank=False, default='' )
- 
+
     description = models.TextField(max_length=1000, null=True, blank=True)
     binding_type=models.CharField(max_length=16,choices=BINDING_CHOICES, default=PERSIST_REPLACE, help_text='Choose the role of service')
     service_api = models.CharField(max_length=16,choices=API_CHOICES, help_text='Choose the API type of service')
@@ -788,14 +789,14 @@ class ServiceBinding(models.Model):
     # use_as_default = models.BooleanField(verbose_name='Use by default', help_text='Set this flag to use this by default')
 
     object_filter=models.TextField(max_length=2000, verbose_name='filter expression', help_text='A (python dict) filter on the objects that this binding applies to', blank=True, null=True)
-    next_service=models.ForeignKey('ServiceBinding', verbose_name='Next service', blank=True, null=True)
-    on_delete_service=models.ForeignKey('ServiceBinding', related_name='on_delete',verbose_name='Deletion service', blank=True, null=True, help_text='This will be invoked on object deletion if specified, and also if the binding is "replace" - which allows for a specific pre-deletion step if not supported by the repository API natively')
-    on_fail_service=models.ForeignKey('ServiceBinding', related_name='on_fail',verbose_name='On fail service', blank=True, null=True, help_text='Overrides default failure reporting')
+    next_service=models.ForeignKey('ServiceBinding', verbose_name='Next service', blank=True, null=True, on_delete = models.CASCADE)
+    on_delete_service=models.ForeignKey('ServiceBinding', related_name='on_delete',verbose_name='Deletion service', blank=True, null=True, help_text='This will be invoked on object deletion if specified, and also if the binding is "replace" - which allows for a specific pre-deletion step if not supported by the repository API natively', on_delete = models.CASCADE)
+    on_fail_service=models.ForeignKey('ServiceBinding', related_name='on_fail',verbose_name='On fail service', blank=True, null=True, help_text='Overrides default failure reporting', on_delete = models.CASCADE)
 
     def __unicode__(self):
         return self.title + "(" + self.service_api + " : " + self.service_url + ")"
-     
-    @staticmethod 
+
+    @staticmethod
     def get_service_bindings(model,bindingtypes):
         ct = ContentType.objects.get(model=model)
         if bindingtypes:
@@ -810,18 +811,18 @@ class ServiceBinding(models.Model):
             obj = obj.next_service
             chain.append(obj)
         return chain
-    
+
     def object_mapping_list(self):
-    
+
         return ",".join( self.object_mapping.values_list('name',flat=True) )
-        
+
 class ResourceMeta(AttachedMetadata):
     """
         extensible metadata using rdf_io managed reusable generic metadata properties
     """
-    subject       = models.ForeignKey("ImportedResource", related_name="metaprops")  
-    
-           
+    subject = models.ForeignKey("ImportedResource", related_name="metaprops", on_delete = models.CASCADE)
+
+
 TYPE_RULE='RULE'
 TYPE_MODEL='CLASS'
 TYPE_INSTANCE='INSTANCE'
@@ -832,53 +833,53 @@ TYPE_CHOICES = (
       ( TYPE_MODEL, 'Class model - RDFS or OWL' ),
       ( TYPE_INSTANCE, 'Instance data - SKOS etc' ),
       ( TYPE_QUERY, 'Query template - SPARQL - for future use' ),
-      ( TYPE_VALIDATION, 'Validation rule - for future use' ), 
+      ( TYPE_VALIDATION, 'Validation rule - for future use' ),
     )
-@python_2_unicode_compatible       
+@python_2_unicode_compatible
 class ImportedResource(models.Model):
 
-    
+
     savedgraph = None
-    
-    subtype = models.ForeignKey(ContentType,editable=False,null=True,verbose_name='Specific Type')
-    
+
+    subtype = models.ForeignKey(ContentType,editable=False,null=True,verbose_name='Specific Type', on_delete = models.CASCADE)
+
     resource_type=models.CharField(choices=TYPE_CHOICES,default=TYPE_INSTANCE,max_length=10,
-    help_text='Determines the post processing applied to the uploaded file')   
-    target_repo=models.ForeignKey(ServiceBinding, verbose_name='Data disposition',help_text='This is a service binding for the data object, in addition to any service bindings applied to the Imported Resource metadata.' , null=True, blank=True)
+    help_text='Determines the post processing applied to the uploaded file')
+    target_repo=models.ForeignKey(ServiceBinding, verbose_name='Data disposition',help_text='This is a service binding for the data object, in addition to any service bindings applied to the Imported Resource metadata.' , null=True, blank=True, on_delete = models.CASCADE)
     description = models.CharField(verbose_name='ImportedResource Name',max_length=255, blank=True)
     file = models.FileField(upload_to='resources/',blank=True)
-    remote = models.URLField(max_length=2000,blank=True,verbose_name='Remote RDF source URI') 
-    graph = models.URLField(max_length=2000,blank=True,null=True,verbose_name='Target RDF graph name') 
+    remote = models.URLField(max_length=2000,blank=True,verbose_name='Remote RDF source URI')
+    graph = models.URLField(max_length=2000,blank=True,null=True,verbose_name='Target RDF graph name')
     uploaded_at = models.DateTimeField(auto_now_add=True)
     # add per user details?
- 
+
     def __unicode__(self):
         return ( ' '.join( [_f for _f in (self.resource_type,':', self.file.__unicode__(), self.remote ) if _f]))
- 
+
     def __str__(self):
         return ( ' '.join( [_f for _f in (self.resource_type,':', self.file.__unicode__(), self.remote ) if _f]))
-        
+
 #    def clean(self):
 #        import fields; pdb.set_trace()
-        
+
     def delete(self,*args,**kwargs):
         if self.file and os.path.isfile(self.file.path):
             os.remove(self.file.path)
         if self.target_repo :
             logger.info("TODO - delete remote resource in repo %s" % self.target_repo)
         super(ImportedResource, self).delete(*args,**kwargs)
-    
-    def save(self,*args,**kwargs): 
+
+    def save(self,*args,**kwargs):
         #import pdb; pdb.set_trace()
         if(not self.subtype):
             self.subtype = ContentType.objects.get_for_model(self.__class__)
         if not self.description:
             self.description = self.__unicode__()
         super(ImportedResource, self).save(*args,**kwargs)
-        
+
     def get_publish_service(self):
         return [ self.target_repo ]
-    
+
     def get_graph(self):
         # import pdb; pdb.set_trace()
         if self.savedgraph :
@@ -890,16 +891,16 @@ class ImportedResource(models.Model):
             format = rdflib.util.guess_format(self.remote)
             self.savedgraph = rdflib.Graph().parse(self.remote,  format=format )
         return self.savedgraph
-        
+
     def getPathVal(self,gr,rootsubject,path):
-        
+
         els = path.split()
         nels = len(els)
         idx = 1
-		
-        sparql="SELECT DISTINCT ?p_%s WHERE { <%s> %s ?p_%s ." % (nels,str(rootsubject), as_uri(els[0]), str(idx)) 
+
+        sparql="SELECT DISTINCT ?p_%s WHERE { <%s> %s ?p_%s ." % (nels,str(rootsubject), as_uri(els[0]), str(idx))
         while idx < nels :
-            sparql +=  " ?p_%s %s ?p_%s ." % (str(idx), as_uri(els[idx]), str(idx+1)) 
+            sparql +=  " ?p_%s %s ?p_%s ." % (str(idx), as_uri(els[idx]), str(idx+1))
             idx += 1
         sparql += " } "
 #        print sparql
@@ -907,14 +908,14 @@ class ImportedResource(models.Model):
         # check if a literal now!
         for res in results:
             return res[0]
-    
+
 def publish(obj, model, oml, rdfstore=None , mode='PUBLISH'):
     """ build RDF graph and execute any postprocessing service chains
 
     Post processing may be tied to the object type - via Service Binding - or may be directly supported by the object type itself.
     Object specific services are executed in advance of general object type bindings - this allows for example uploaded resources to be installed before executing an inferencing chain.
     """
-       
+
     gr = Graph()
     # import pdb; pdb.set_trace()
 #    ns_mgr = NamespaceManager(Graph())
@@ -926,9 +927,9 @@ def publish(obj, model, oml, rdfstore=None , mode='PUBLISH'):
     except Exception as e:
         logger.exception(sys.exc_info()[0])
         raise Exception("Error during serialisation: " + str(e) )
-   
-#    curl -X POST -H "Content-Type: text/turtle" -d @- http://192.168.56.151:8080/marmotta/import/upload?context=http://mapstory.org/def/featuretypes/gazetteer 
-    
+
+#    curl -X POST -H "Content-Type: text/turtle" -d @- http://192.168.56.151:8080/marmotta/import/upload?context=http://mapstory.org/def/featuretypes/gazetteer
+
     inference_chain_results = []
     try:
         obj_chain = obj.get_publish_service()
@@ -936,7 +937,7 @@ def publish(obj, model, oml, rdfstore=None , mode='PUBLISH'):
     except:
         pass
     inference_chain_results = inference_chain_results + execute_service_chain(model,obj,mode, gr, ServiceBinding.get_service_bindings(model,None) )
-    
+
 def execute_service_chain(model,obj, mode, gr, chain):
     inference_chain_results = []
     for next_binding in chain :
@@ -956,43 +957,43 @@ def execute_service_chain(model,obj, mode, gr, chain):
 
     return inference_chain_results
 
-   
-def build_rdf( gr,obj, oml, includemembers ) :  
 
-    # would be nice to add some comments : as metadata on the graph? '# Turtle generated by django-rdf-io configurable serializer\n'  
+def build_rdf( gr,obj, oml, includemembers ) :
+
+    # would be nice to add some comments : as metadata on the graph? '# Turtle generated by django-rdf-io configurable serializer\n'
     mappingsused = 0
     for om in oml :
         # check filter
-        objfilter = getattr(om,'filter') 
+        objfilter = getattr(om,'filter')
         if objfilter and not apply_pathfilter(obj, objfilter ) :
             continue
-        mappingsused += 1  
+        mappingsused += 1
         try:
             tgt_id = getattr_path(obj,om.id_attr)[0]
         except (IndexError,ValueError) as e:
             raise ValueError("target id attribute {} not found".format( (om.id_attr ,)))
-        if om.target_uri_expr[0] == '"' :   
+        if om.target_uri_expr[0] == '"' :
             uribase = om.target_uri_expr[1:-1]
         else:
             uribase = getattr_path(obj,om.target_uri_expr)[0]
-            
+
         tgt_id = str(tgt_id).replace(uribase,"")
         # strip uri base if present in tgt_id
         uribase = expand_curie(uribase)
-        
- 
+
+
         if not tgt_id:
             uri = uribase
         elif uribase[-1] == '/' or uribase[-1] == '#' :
             uri = "".join((uribase,tgt_id))
         else :
             uri = "/".join((uribase,tgt_id))
-        
+
         subject = URIRef(uri)
-        
+
         for omt in om.obj_type.all() :
             gr.add( (subject, RDF.type , as_resource(gr,omt.uri)) )
-  
+
         # now get all the attribute mappings and add these in
         for am in AttributeMapping.objects.filter(scope=om) :
             if am.predicate[0] != ':' :
@@ -1005,9 +1006,9 @@ def build_rdf( gr,obj, oml, includemembers ) :
                             # brute force quote - ignoring any string @lang or ^^ type stuff quote() handles
                             value = value[1:-1].join(('"','"'))
                         else :
-                            value = quote(value) 
+                            value = quote(value)
                         _add_vals(gr, obj, subject, str(predicate), value, is_resource)
-        
+
         if includemembers:
             for cm in ChainedMapping.objects.filter(scope=om) :
                 for val in getattr_path(obj,cm.attr):
@@ -1015,25 +1016,25 @@ def build_rdf( gr,obj, oml, includemembers ) :
                         build_rdf( gr,val, (cm.chainedMapping,), includemembers )
                     except:
                         logger.error( "Error serialising object %s as %s " % ( val, cm.attr ))
-        
+
         for em in EmbeddedMapping.objects.filter(scope=om) :
             try:
                 # three options - scalar value in which case attributes relative to basic obj, a mulitvalue obj or we have to look for related objects
                 try:
                     valuelist = getattr_path(obj,em.attr)
                 except:
-                    valuelist = [obj,] 
+                    valuelist = [obj,]
 
                 for value in valuelist :
                     newnode = None
- 
+
                     for element in em.struct.split(";") :
                         try:
                             (predicate,expr) = element.split()
                         except:
                             predicate = None
                             expr = element
-                            
+
                         # resolve any internal template parameters {x}
                         expr = expr.replace("{$URI}", uri )
 
@@ -1051,7 +1052,7 @@ def build_rdf( gr,obj, oml, includemembers ) :
                                 raise ValueError( "Could not access value of %s from mapped object %s (/ is relative to the object being mapped" % (expr,obj) )
                         else:
                             is_resource = False
-                        
+
                         for (lit,var,x,y) in Formatter().parse(expr) :
                             if var :
                                 try:
@@ -1059,7 +1060,7 @@ def build_rdf( gr,obj, oml, includemembers ) :
                                         val = next(iter(getattr_path(obj,var[1:])))
                                     else:
                                         val = next(iter(getattr_path(value,var)))
-                                    
+
                                     if is_resource:
                                         try:
                                             val = u.urlencode({ 'v' : val.encode('utf-8')})[2:]
@@ -1085,8 +1086,8 @@ def build_rdf( gr,obj, oml, includemembers ) :
                 raise ValueError("Could not evaluate extended mapping %s : %s " % (e,em.attr))
     # do this after looping through all object mappings!
     return gr if mappingsused > 0 else None
-                            
-def _add_vals(gr, obj, subject, predicate, attr, is_resource ) :       
+
+def _add_vals(gr, obj, subject, predicate, attr, is_resource ) :
             if type(attr) == float or attr[0] in '\'\"' : # then a literal
                 gr.add( (subject, as_resource(gr,predicate) , makenode(gr,attr,is_resource) ) )
             else :
@@ -1095,9 +1096,3 @@ def _add_vals(gr, obj, subject, predicate, attr, is_resource ) :
                     if not value :
                         continue
                     gr.add( (subject, as_resource(gr,predicate) , makenode(gr,value,is_resource) ) )
- 
-    
-    
-    
-    
-    
